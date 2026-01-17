@@ -1,0 +1,22 @@
+{
+  "name": "@vitalops/utils",
+  "version": "1.0.0",
+  "description": "Shared utility functions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.3",
+    "date-fns": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.3.0"
+  }
+}
+
+
+

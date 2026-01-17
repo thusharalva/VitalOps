@@ -1,0 +1,683 @@
+// VitalOps - Complete Database Schema
+// Medical Equipment Rental Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// 1. AUTHENTICATION & USERS
+// ============================================
+
+enum UserRole {
+  ADMIN
+  MANAGER
+  TECHNICIAN
+  ACCOUNTANT
+  SALES_REP
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  name          String
+  phone         String?
+  role          UserRole @default(MANAGER)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  assignedJobs  Job[]
+  createdAssets Asset[]  @relation("CreatedBy")
+  activityLogs  ActivityLog[]
+
+  @@map("users")
+}
+
+// ============================================
+// 2. ASSET MANAGEMENT MODULE
+// ============================================
+
+enum AssetStatus {
+  AVAILABLE
+  RENTED
+  IN_SERVICE
+  DAMAGED
+  SOLD
+  RETIRED
+}
+
+enum AssetCondition {
+  NEW
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+}
+
+model AssetCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assets Asset[]
+
+  @@map("asset_categories")
+}
+
+model Asset {
+  id              String          @id @default(uuid())
+  assetCode       String          @unique
+  qrCode          String          @unique
+  name            String
+  categoryId      String
+  category        AssetCategory   @relation(fields: [categoryId], references: [id])
+  
+  // Purchase & Financial Info
+  purchaseDate    DateTime
+  purchasePrice   Decimal         @db.Decimal(10, 2)
+  currentValue    Decimal         @db.Decimal(10, 2)
+  depreciationRate Decimal        @db.Decimal(5, 2)
+  
+  // Asset Details
+  manufacturer    String?
+  model           String?
+  serialNumber    String?         @unique
+  status          AssetStatus     @default(AVAILABLE)
+  condition       AssetCondition  @default(GOOD)
+  
+  // Location & Tracking
+  currentLocation String?
+  lastKnownLat    Decimal?        @db.Decimal(10, 8)
+  lastKnownLng    Decimal?        @db.Decimal(11, 8)
+  lastScannedAt   DateTime?
+  
+  // Metadata
+  notes           String?
+  images          String[]
+  createdById     String
+  createdBy       User            @relation("CreatedBy", fields: [createdById], references: [id])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  rentalItems     RentalItem[]
+  sales           Sale[]
+  serviceLogs     ServiceLog[]
+  assetLogs       AssetLog[]
+  sleepStudies    SleepStudy[]
+
+  @@map("assets")
+}
+
+model AssetLog {
+  id          String   @id @default(uuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  action      String
+  description String?
+  location    String?
+  latitude    Decimal? @db.Decimal(10, 8)
+  longitude   Decimal? @db.Decimal(11, 8)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@map("asset_logs")
+}
+
+// ============================================
+// 3. CUSTOMER MANAGEMENT
+// ============================================
+
+model Customer {
+  id              String   @id @default(uuid())
+  name            String
+  phone           String   @unique
+  email           String?
+  address         String
+  city            String?
+  state           String?
+  pincode         String?
+  
+  // KYC Documents
+  aadharNumber    String?
+  panNumber       String?
+  documentImages  String[]
+  
+  // Metadata
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  rentals         Rental[]
+  sales           Sale[]
+  sleepStudies    SleepStudy[]
+  payments        Payment[]
+
+  @@map("customers")
+}
+
+// ============================================
+// 4. RENTAL MODULE
+// ============================================
+
+enum RentalStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+  CONVERTED_TO_SALE
+}
+
+model Rental {
+  id              String        @id @default(uuid())
+  rentalNumber    String        @unique
+  
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  
+  // Rental Terms
+  startDate       DateTime
+  endDate         DateTime?
+  monthlyRent     Decimal       @db.Decimal(10, 2)
+  securityDeposit Decimal       @db.Decimal(10, 2)
+  
+  // Status
+  status          RentalStatus  @default(ACTIVE)
+  
+  // Billing
+  billingDay      Int           @default(1)
+  lastBilledDate  DateTime?
+  nextBillingDate DateTime?
+  
+  // Metadata
+  notes           String?
+  contractPdfUrl  String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  rentalItems     RentalItem[]
+  payments        Payment[]
+  invoices        Invoice[]
+
+  @@map("rentals")
+}
+
+model RentalItem {
+  id          String   @id @default(uuid())
+  rentalId    String
+  rental      Rental   @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  
+  rentedAt    DateTime @default(now())
+  returnedAt  DateTime?
+  
+  // Location tracking
+  rentedLocation    String?
+  returnedLocation  String?
+  rentedLat         Decimal? @db.Decimal(10, 8)
+  rentedLng         Decimal? @db.Decimal(11, 8)
+  returnedLat       Decimal? @db.Decimal(10, 8)
+  returnedLng       Decimal? @db.Decimal(11, 8)
+  
+  notes       String?
+
+  @@map("rental_items")
+}
+
+// ============================================
+// 5. SALES MODULE
+// ============================================
+
+enum SaleType {
+  DIRECT_SALE
+  RENTAL_CONVERSION
+}
+
+model Sale {
+  id              String    @id @default(uuid())
+  saleNumber      String    @unique
+  
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id])
+  
+  assetId         String
+  asset           Asset     @relation(fields: [assetId], references: [id])
+  
+  saleType        SaleType  @default(DIRECT_SALE)
+  saleDate        DateTime  @default(now())
+  
+  // Pricing
+  salePrice       Decimal   @db.Decimal(10, 2)
+  discount        Decimal   @db.Decimal(10, 2) @default(0)
+  finalPrice      Decimal   @db.Decimal(10, 2)
+  
+  // Invoice
+  invoiceNumber   String?   @unique
+  invoicePdfUrl   String?
+  
+  // Metadata
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  payments        Payment[]
+
+  @@map("sales")
+}
+
+// ============================================
+// 6. TECHNICIAN JOB MODULE
+// ============================================
+
+enum JobType {
+  INSTALLATION
+  PICKUP
+  DELIVERY
+  SERVICE
+  REPAIR
+  SLEEP_STUDY_SETUP
+  SLEEP_STUDY_PICKUP
+}
+
+enum JobStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
+  CARD
+}
+
+model Job {
+  id              String        @id @default(uuid())
+  jobNumber       String        @unique
+  
+  type            JobType
+  status          JobStatus     @default(ASSIGNED)
+  
+  // Assignment
+  technicianId    String
+  technician      User          @relation(fields: [technicianId], references: [id])
+  
+  // Customer & Location
+  customerId      String?
+  customerName    String
+  customerPhone   String
+  address         String
+  latitude        Decimal?      @db.Decimal(10, 8)
+  longitude       Decimal?      @db.Decimal(11, 8)
+  
+  // Scheduling
+  scheduledDate   DateTime
+  scheduledTime   String?
+  
+  // Execution
+  startedAt       DateTime?
+  completedAt     DateTime?
+  startQrScan     String?
+  endQrScan       String?
+  
+  // Payment Collection
+  amountToCollect Decimal?      @db.Decimal(10, 2)
+  amountCollected Decimal?      @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod?
+  paymentProofUrl String?
+  
+  // Metadata
+  description     String?
+  notes           String?
+  images          String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  sleepStudy      SleepStudy?
+
+  @@map("jobs")
+}
+
+// ============================================
+// 7. SLEEP STUDY MODULE
+// ============================================
+
+enum SleepStudyStatus {
+  BOOKED
+  DEVICE_DELIVERED
+  STUDY_IN_PROGRESS
+  DEVICE_PICKED_UP
+  REPORT_PENDING
+  REPORT_UPLOADED
+  COMPLETED
+  CANCELLED
+}
+
+model Doctor {
+  id           String   @id @default(uuid())
+  name         String
+  specialization String?
+  phone        String?
+  email        String?
+  hospital     String?
+  address      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  sleepStudies SleepStudy[]
+
+  @@map("doctors")
+}
+
+model SleepStudy {
+  id              String            @id @default(uuid())
+  studyNumber     String            @unique
+  
+  // Patient Info
+  customerId      String
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  patientName     String
+  patientAge      Int
+  patientGender   String
+  
+  // Doctor
+  doctorId        String?
+  doctor          Doctor?           @relation(fields: [doctorId], references: [id])
+  referringDoctor String?
+  
+  // Device Assignment
+  assetId         String?
+  asset           Asset?            @relation(fields: [assetId], references: [id])
+  
+  // Status & Timeline
+  status          SleepStudyStatus  @default(BOOKED)
+  bookingDate     DateTime          @default(now())
+  studyDate       DateTime?
+  deliveryDate    DateTime?
+  pickupDate      DateTime?
+  
+  // Jobs
+  deliveryJobId   String?           @unique
+  deliveryJob     Job?              @relation(fields: [deliveryJobId], references: [id])
+  
+  // Report
+  reportUploadedAt DateTime?
+  reportPdfUrl    String?
+  studyResult     String?
+  ahi             Decimal?          @db.Decimal(5, 2)
+  
+  // Follow-up
+  recommendationSent Boolean        @default(false)
+  convertedToRental  Boolean        @default(false)
+  
+  // Financial
+  studyFee        Decimal           @db.Decimal(10, 2)
+  paid            Boolean           @default(false)
+  
+  // Metadata
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("sleep_studies")
+}
+
+// ============================================
+// 8. BILLING & PAYMENTS MODULE
+// ============================================
+
+enum InvoiceType {
+  RENTAL_MONTHLY
+  RENTAL_DEPOSIT
+  SALE
+  SERVICE
+  SLEEP_STUDY
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id              String        @id @default(uuid())
+  invoiceNumber   String        @unique
+  
+  // Related Entity
+  rentalId        String?
+  rental          Rental?       @relation(fields: [rentalId], references: [id])
+  
+  // Invoice Details
+  type            InvoiceType
+  status          InvoiceStatus @default(DRAFT)
+  
+  // Amounts
+  subtotal        Decimal       @db.Decimal(10, 2)
+  tax             Decimal       @db.Decimal(10, 2) @default(0)
+  discount        Decimal       @db.Decimal(10, 2) @default(0)
+  total           Decimal       @db.Decimal(10, 2)
+  paidAmount      Decimal       @db.Decimal(10, 2) @default(0)
+  dueAmount       Decimal       @db.Decimal(10, 2)
+  
+  // Dates
+  issueDate       DateTime      @default(now())
+  dueDate         DateTime
+  paidDate        DateTime?
+  
+  // UPI QR
+  upiQrUrl        String?
+  
+  // Documents
+  pdfUrl          String?
+  
+  // WhatsApp
+  sentViaWhatsApp Boolean       @default(false)
+  whatsappSentAt  DateTime?
+  
+  // Metadata
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  invoiceItems    InvoiceItem[]
+  payments        Payment[]
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  
+  description String
+  quantity    Int     @default(1)
+  unitPrice   Decimal @db.Decimal(10, 2)
+  amount      Decimal @db.Decimal(10, 2)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  paymentNumber   String        @unique
+  
+  // Related Entities
+  invoiceId       String?
+  invoice         Invoice?      @relation(fields: [invoiceId], references: [id])
+  
+  rentalId        String?
+  rental          Rental?       @relation(fields: [rentalId], references: [id])
+  
+  saleId          String?
+  sale            Sale?         @relation(fields: [saleId], references: [id])
+  
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  
+  // Payment Details
+  amount          Decimal       @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod
+  paymentDate     DateTime      @default(now())
+  
+  // UPI/Bank Details
+  transactionId   String?
+  upiId           String?
+  bankReference   String?
+  
+  // Proof
+  receiptUrl      String?
+  proofImageUrl   String?
+  
+  // Metadata
+  notes           String?
+  recordedBy      String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("payments")
+}
+
+// ============================================
+// 9. WHATSAPP INTEGRATION
+// ============================================
+
+enum MessageType {
+  INVOICE
+  PAYMENT_REMINDER
+  PAYMENT_CONFIRMATION
+  JOB_ASSIGNMENT
+  SLEEP_STUDY_REMINDER
+  RENTAL_EXPIRY
+  GENERAL
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model WhatsAppMessage {
+  id              String        @id @default(uuid())
+  
+  // Recipient
+  phone           String
+  customerName    String?
+  
+  // Message
+  type            MessageType
+  templateName    String?
+  message         String
+  mediaUrl        String?
+  
+  // Status
+  status          MessageStatus @default(QUEUED)
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  readAt          DateTime?
+  
+  // API Response
+  messageId       String?
+  errorMessage    String?
+  
+  // Metadata
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("whatsapp_messages")
+}
+
+// ============================================
+// 10. SERVICE & MAINTENANCE
+// ============================================
+
+model ServiceLog {
+  id              String   @id @default(uuid())
+  assetId         String
+  asset           Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  
+  serviceDate     DateTime @default(now())
+  serviceType     String
+  description     String
+  
+  technicianName  String?
+  cost            Decimal? @db.Decimal(10, 2)
+  
+  nextServiceDue  DateTime?
+  
+  notes           String?
+  images          String[]
+  createdAt       DateTime @default(now())
+
+  @@map("service_logs")
+}
+
+// ============================================
+// 11. ACTIVITY LOG (Audit Trail)
+// ============================================
+
+model ActivityLog {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  
+  action      String
+  entity      String
+  entityId    String
+  
+  description String
+  metadata    Json?
+  
+  ipAddress   String?
+  userAgent   String?
+  
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+// ============================================
+// 12. SYSTEM SETTINGS
+// ============================================
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+

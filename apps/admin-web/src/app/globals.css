@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-gray-50 via-white to-primary-50/30;
+    @apply text-gray-900;
+    @apply antialiased;
+  }
+}
+
+@layer utilities {
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1;
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary-600 to-primary-500 text-white;
+    @apply hover:from-primary-700 hover:to-primary-600;
+    @apply shadow-lg shadow-primary-500/30 hover:shadow-xl hover:shadow-primary-500/40;
+    @apply transition-all duration-200;
+  }
+  
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-lg border border-gray-200/50;
+    @apply shadow-soft;
+  }
+
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-emerald-600;
+  }
+}
+
