@@ -12,6 +12,20 @@ Vercel can't detect Next.js because it's looking in the wrong place for a monore
 
 ### Step 2: Configure Project Settings
 
+**IMPORTANT:** For monorepos, we need to configure this correctly.
+
+**Option A: Using Root vercel.json (Recommended)**
+
+1. **Root Directory:** Leave EMPTY (or set to `./` - root of repository)
+2. **Framework Preset:** `Next.js`
+3. **Build Command:** (Leave empty - will use vercel.json)
+4. **Output Directory:** (Leave empty - will use vercel.json)
+5. **Install Command:** (Leave empty - will use vercel.json)
+
+The `vercel.json` file in the root will handle everything automatically.
+
+**Option B: Manual Configuration**
+
 **Framework Preset:**
 ```
 Next.js
