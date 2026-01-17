@@ -15,6 +15,8 @@ Vercel build fails because:
 
 ### Step 2: Update Build & Development Settings
 
+**Option A: Using Root Directory (Recommended)**
+
 **Root Directory:**
 ```
 apps/admin-web
@@ -23,11 +25,6 @@ apps/admin-web
 **Build Command:**
 ```bash
 cd ../.. && npm install && npm run build:packages && cd apps/admin-web && npm run build
-```
-
-**OR** (if the above doesn't work):
-```bash
-cd ../.. && npm install && npm run build --workspace=packages/types && npm run build --workspace=packages/utils && npm run build --workspace=packages/ui && cd apps/admin-web && npm run build
 ```
 
 **Output Directory:**
@@ -39,6 +36,16 @@ cd ../.. && npm install && npm run build --workspace=packages/types && npm run b
 ```bash
 cd ../.. && npm install
 ```
+
+**Option B: Using vercel.json (Alternative)**
+
+I've created `apps/admin-web/vercel.json` which Vercel will automatically detect. In this case:
+
+**Root Directory:** Leave empty (or set to root `./`)
+
+**Build Command:** (auto-detected from vercel.json)
+
+**Output Directory:** (auto-detected from vercel.json)
 
 ### Step 3: Environment Variables
 
